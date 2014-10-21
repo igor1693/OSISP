@@ -1,5 +1,7 @@
 
-#include <windows.h> 
+#include <windows.h>
+#include <tchar.h>
+#include <string.h>
 #define PEN 5
 #define LINE 6
 #define ELLIPSE 7
@@ -12,7 +14,10 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 
 int Menu(HWND);
-BOOL flag=false,Poly_line=false,Zooming=false;
+BOOL flag=false,Poly_line=false,Zooming=false,fText=false;
+BOOL SaveFile(HWND);
+BOOL OpenFile(HWND);
+BOOL PrintFile(HWND);
 HPEN RedPen=CreatePen(PS_SOLID,1,RGB(255,0,0));
 INT startX,endX,startY,endY,Tools;
 PAINTSTRUCT ps;
@@ -21,6 +26,15 @@ HDC hDC;
 HDC hdcMem;
 HBITMAP hbmMem;
 HANDLE hOld;
+char *text;
+int i = 0;	
+int xscale_last=0;
+int yscale_last=0;
+int xscale,yscale;
+int spacex=0;
+int spacey=0;
+int xlast=0;
+int ylast=0;
 
 void Draw(HWND,LPARAM);
 void DrawPen(HWND,INT,INT,LPARAM,HPEN);
@@ -108,14 +122,19 @@ int WINAPI WinMain(HINSTANCE hInst,
  }
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 	GetClientRect(hWnd,&rec);
- INT xscale=0,yscale=0;
     switch(uMsg){
 		case WM_COMMAND:
 		flag=false;
 		switch(wParam){
-		case 1:break;
-		case 2:break;
-		case 3:break;
+		case 1:
+			OpenFile(hWnd);
+			break;
+		case 2:
+			SaveFile(hWnd);
+			break;
+		case 3:
+			PrintFile(hWnd);
+			break;
 		case 4:break;
 		case 5:Tools=5;break;
 		case 6:Tools=6;break;
@@ -123,20 +142,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 		case 8:Tools=8;break;
 		case 9:Tools=9;break;
 		case 10:Tools=10;break;
-		case 11:Tools=11;break;
-		case 12:Tools=12;break;
-		case 13:Tools=13;break;
+		case 11:Tools=11;
+			fText=true;
+			i=0;
+			break;
+		case 12:Tools=12;
+			xscale=xscale_last;
+			yscale=yscale_last;
+			break;
+		case 13:
+			Tools=13;
+			spacex=xlast;
+			spacey=ylast;
+			break;
 		};
 			break;
 	case WM_PAINT:
 		hDC=BeginPaint(hWnd,&ps);
 		GetClientRect(hWnd,&rec);
-		BitBlt(hDC,0,0,rec.right,rec.bottom,hdcMem,0,0,SRCCOPY);
+		BitBlt(hDC,spacex,spacey,rec.right,rec.bottom,hdcMem,0,0,SRCCOPY);
 
 
 		EndPaint(hWnd,&ps);
 		break;
 	case WM_LBUTTONDOWN:
+		spacex=0;
+		spacey=0;
 				hDC=GetDC(hWnd);
 				GetClientRect(hWnd,&rec);
 				hdcMem=CreateCompatibleDC(hDC);
@@ -144,6 +175,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 				hOld=SelectObject(hdcMem,hbmMem);
 				BitBlt(hdcMem,0,0,rec.right,rec.bottom,hDC,0,0,SRCCOPY);
 				ReleaseDC(hWnd,hDC);
+				if(Tools==11)
+				{
+					fText=true;
+					i=0;
+					text=(char *)calloc(256,sizeof(char));
+				}
 				if(Tools==9)
 					Poly_line=true;
 				else
@@ -157,11 +194,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 				Draw(hWnd,lParam);
 		if(flag)
 			Draw(hWnd,lParam);
-			if(Tools==12)
-			{
-			xscale=0;
-			yscale=0;
-			}
 			break;
 	case WM_LBUTTONUP:
 		if(Poly_line)
@@ -186,6 +218,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 		flag=false;
 		Poly_line=false;
 	break;
+	case WM_CHAR:
+		if(Tools==11)
+		{
+			hDC=GetDC(hWnd);
+			char c=(char)wParam;
+			if(c==VK_RBUTTON)
+			{
+				fText=false;
+				text[i]='\0';
+			}
+			else
+				text[i++]=c;
+			TextOutA(hDC,startX,startY,(LPSTR)text,strlen((char *)text));
+		}
+		break;
 	case WM_MOUSEWHEEL:
 		if(Tools==12)
 		if(GET_WHEEL_DELTA_WPARAM(wParam)>0)
@@ -194,11 +241,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			GetClientRect(hWnd,&rec);
 			xscale+=10;
 			yscale+=10;
-			StretchBlt(hDC, 0, 0, rec.right + xscale, rec.bottom + yscale, hdcMem,
+			StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
      		0, 0, rec.right, rec.bottom, SRCCOPY);
-			BitBlt(hdcMem,0,0,rec.right,rec.bottom,hDC,0,0,SRCCOPY);
 			
-			//BitBlt(hDC,0,0,rec.right,rec.bottom,hdcMem,0,0,SRCCOPY);
 			ReleaseDC(hWnd,hDC);
 		}
 		else
@@ -207,12 +252,58 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			GetClientRect(hWnd,&rec);
 			xscale-=10;
 			yscale-=10;
-			StretchBlt(hDC, 0, 0, rec.right + xscale, rec.bottom + yscale, hdcMem,
+			StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
      		0, 0, rec.right, rec.bottom, SRCCOPY);
-			BitBlt(hdcMem,0,0,rec.right,rec.bottom,hDC,0,0,SRCCOPY);
-			//BitBlt(hDC,0,0,rec.right,rec.bottom,hdcMem,0,0,SRCCOPY);
+			ReleaseDC(hWnd,hDC);
 		}
-		
+		xscale_last=xscale;
+		yscale_last=yscale;
+		break;
+	case WM_KEYDOWN:
+		{
+			if(Tools==13)
+			{
+				hDC=GetDC(hWnd);
+				WPARAM key=wParam;
+				switch(key)
+				{
+				case 37:
+					GetClientRect(hWnd,&rec);
+					InvalidateRect(hWnd,&rec,true);
+					UpdateWindow(hWnd);
+					spacex-=3;
+					StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
+					0, 0, rec.right, rec.bottom, SRCCOPY);
+					break;
+				case 38:
+					GetClientRect(hWnd,&rec);
+					InvalidateRect(hWnd,&rec,true);
+					UpdateWindow(hWnd);
+					spacey-=3;
+					StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
+					0, 0, rec.right, rec.bottom, SRCCOPY);
+					break;
+				case 39:
+					GetClientRect(hWnd,&rec);
+					InvalidateRect(hWnd,&rec,true);
+					UpdateWindow(hWnd);
+					spacex+=3;
+					StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
+					0, 0, rec.right, rec.bottom, SRCCOPY);
+					break;
+				case 40:
+					GetClientRect(hWnd,&rec);
+					InvalidateRect(hWnd,&rec,true);
+					UpdateWindow(hWnd);
+					spacey+=3;
+					StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
+					0, 0, rec.right, rec.bottom, SRCCOPY);
+					break;
+				}
+				xlast=spacex;
+				ylast=spacey;
+			}
+		}
 		break;
     case WM_DESTROY: 
 		DeleteObject(RedPen);
@@ -226,6 +317,105 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
         return DefWindowProc(hWnd, uMsg, wParam, lParam); 
     }
     return NULL; 
+}
+
+BOOL SaveFile(HWND hWnd)
+{
+	RECT _rect = rec;
+	hDC = GetDC(hWnd);
+	int Width_mm = GetDeviceCaps(hDC, HORZSIZE);
+	int Height_mm = GetDeviceCaps(hDC, VERTSIZE);
+	int Width_pcs = GetDeviceCaps(hDC, HORZRES);
+	int Height_pcs = GetDeviceCaps(hDC, VERTRES);
+
+	_rect.left = (_rect.left * Width_mm * 100) / Width_pcs;
+	_rect.top = (_rect.top * Height_mm * 100) / Height_pcs;
+	_rect.right = (_rect.right * Width_mm * 100) / Width_pcs;
+	_rect.bottom = (_rect.bottom * Height_mm * 100) / Height_pcs;
+
+	TCHAR szFilters[] = _T("Scribble Files (*.emf)\0*.emf\0\0");
+	TCHAR szFilePathName[_MAX_PATH];
+	OPENFILENAME ofn;
+
+	ZeroMemory(&ofn, sizeof(OPENFILENAME));
+	szFilePathName[0] = '\0';
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = hWnd;
+	ofn.lpstrFilter = szFilters;
+	ofn.lpstrFile = szFilePathName;
+	ofn.lpstrDefExt = _T("emf");
+	ofn.nMaxFile = _MAX_PATH;
+	ofn.lpstrTitle = _T("Save File");
+	ofn.Flags = OFN_OVERWRITEPROMPT;
+
+	GetSaveFileName(&ofn);
+	HDC hdcMeta = CreateEnhMetaFile(NULL, (LPTSTR)ofn.lpstrFile, &_rect, L"Create Meta File\0");
+	StretchBlt(hdcMeta, 0, 0, rec.right, rec.bottom, hDC, 0, 0, rec.right, rec.bottom, SRCCOPY);
+	CloseEnhMetaFile(hdcMeta);
+
+	return TRUE;
+}
+
+BOOL OpenFile(HWND hWnd)
+{
+	HDC hDC=GetDC(hWnd);
+	TCHAR szFilters[] = _T("Scribble Files (*.emf)\0*.emf\0\0");
+	TCHAR szFilePathName[_MAX_PATH] = _T("");
+	OPENFILENAME ofn = { 0 };
+
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = hWnd;
+	ofn.lpstrFilter = szFilters;
+	ofn.lpstrFile = szFilePathName;
+	ofn.lpstrDefExt = _T("emf");
+	ofn.nMaxFile = _MAX_PATH;
+	ofn.lpstrTitle = _T("Open File");
+	ofn.nFileOffset = 0;
+	ofn.nFileExtension = 0;
+	ofn.Flags = OFN_SHOWHELP | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+	GetOpenFileName(&ofn);
+
+	HENHMETAFILE hemf = GetEnhMetaFile(ofn.lpstrFile);
+	PlayEnhMetaFile(hDC, hemf, &rec);
+	//PlayEnhMetaFile(hdc, hemf, &rect);
+	DeleteEnhMetaFile(hemf);
+	InvalidateRect(hWnd, &rec, false);
+	return TRUE;
+}
+
+BOOL PrintFile(HWND hWnd)
+{
+	PRINTDLG pd;
+	hDC=GetDC(hWnd);
+	ZeroMemory(&pd, sizeof(pd));
+	pd.lStructSize = sizeof(pd);
+	pd.hwndOwner = hWnd;
+	pd.hDevMode = NULL;
+	pd.hDevNames = NULL;
+	pd.Flags = PD_RETURNDC | PD_NOSELECTION | PD_PRINTTOFILE | PD_NOPAGENUMS;
+	pd.nMinPage = 1;
+	pd.nMaxPage = 1;
+	pd.nCopies = 1;
+
+	if (PrintDlg(&pd) == TRUE)
+	{
+		DOCINFO doc;
+		GlobalUnlock(pd.hDevMode);
+		DEVNAMES * pdn = (DEVNAMES *)GlobalLock(pd.hDevNames);
+		ZeroMemory(&doc, sizeof(doc));
+		doc.cbSize = sizeof(doc);
+		doc.lpszDatatype = _T("RAW");
+		doc.lpszOutput = (TCHAR *)pdn + pdn->wOutputOffset;
+		int sd = StartDoc(pd.hDC, &doc);
+		StartPage(pd.hDC);
+		//BitBlt(pd.hDC, 0, 0, width, height, dubmemDC, 0, 0, SRCCOPY);
+		BitBlt(pd.hDC, 0, 0, rec.right, rec.bottom, hDC, 0, 0, SRCCOPY);
+		EndPage(pd.hDC);
+		//EndDoc(pd.hDC);
+		DeleteDC(pd.hDC);
+	}
+
+	return TRUE;
 }
 
 VOID Draw(HWND hWnd,LPARAM lParam)
