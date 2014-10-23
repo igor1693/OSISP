@@ -1,7 +1,12 @@
 
 #include <windows.h>
 #include <tchar.h>
+#include <CommDlg.h>
 #include <string.h>
+#define OPEN 1
+#define SAVE 2
+#define PRINT 3
+#define EXIT 4
 #define PEN 5
 #define LINE 6
 #define ELLIPSE 7
@@ -9,16 +14,35 @@
 #define POLYLINE 9
 #define POLYGON 10
 #define TEXT 11
+#define ZOOM 12
+#define PAN 13
+#define RED 14
+#define GREEN 15
+#define BLUE 16
+#define BLACK 17
+#define FILLRED 18
+#define FILLGREEN 19
+#define FILLBLUE 20
+#define FILLBLACK 21
+#define FILLNONE 22
+#define WIDTH1 23
+#define WIDTH2 24
+#define WIDTH3 25
+#define WIDTH4 26
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 
 
 int Menu(HWND);
-BOOL flag=false,Poly_line=false,Zooming=false,fText=false;
+HINSTANCE hInst;
+BOOL flag=false,Poly_line=false,Zooming=false,fText=false,keyflag=false;
 BOOL SaveFile(HWND);
 BOOL OpenFile(HWND);
 BOOL PrintFile(HWND);
-HPEN RedPen=CreatePen(PS_SOLID,1,RGB(255,0,0));
+HPEN PenColor=CreatePen(PS_SOLID,1,RGB(0,0,0));
+DWORD color=RGB(0,0,0);
+HBRUSH hBrush=(HBRUSH)GetStockObject(HOLLOW_BRUSH);
+int width=1;
 INT startX,endX,startY,endY,Tools;
 PAINTSTRUCT ps;
 RECT rec;
@@ -26,6 +50,7 @@ HDC hDC;
 HDC hdcMem;
 HBITMAP hbmMem;
 HANDLE hOld;
+HPEN hPen;
 char *text;
 int i = 0;	
 int xscale_last=0;
@@ -38,7 +63,6 @@ int ylast=0;
 
 void Draw(HWND,LPARAM);
 void DrawPen(HWND,INT,INT,LPARAM,HPEN);
-void StoreBitmapFile(LPSTR,HBITMAP);
 
 int WINAPI WinMain(HINSTANCE hInst, 
                    HINSTANCE hPrevInst,
@@ -98,6 +122,9 @@ int WINAPI WinMain(HINSTANCE hInst,
 	 HMENU MainMenu=CreateMenu();
 	 HMENU hPopupMenu=CreatePopupMenu();
 	 HMENU hToolsMenu=CreatePopupMenu();
+	 HMENU hColorMenu=CreatePopupMenu();
+	 HMENU hFillColorMenu=CreatePopupMenu();
+	 HMENU hWidthMenu=CreatePopupMenu();
 	 AppendMenu(MainMenu,MFT_STRING|MF_POPUP,(UINT)hPopupMenu,L"&Файл");
 	 {
 		 AppendMenu(hPopupMenu,MF_STRING,1,L"Открыть");
@@ -117,6 +144,29 @@ int WINAPI WinMain(HINSTANCE hInst,
 		 AppendMenu(hToolsMenu,MF_STRING,12,L"Масштабирование");
 		 AppendMenu(hToolsMenu,MF_STRING,13,L"Перемещение");
 	 }
+	  	  AppendMenu(MainMenu,MFT_STRING|MF_POPUP,(UINT)hColorMenu,L"&Цвет");
+		  {
+			  AppendMenu(hColorMenu,MF_STRING,14,L"Красный");
+			  AppendMenu(hColorMenu,MF_STRING,15,L"Зелёный");
+			  AppendMenu(hColorMenu,MF_STRING,16,L"Синий");
+			  AppendMenu(hColorMenu,MF_STRING,17,L"Чёрный");
+		  }
+		  AppendMenu(MainMenu,MFT_STRING|MF_POPUP,(UINT)hFillColorMenu,L"&Заливка");
+		  {
+			 
+			AppendMenu(hFillColorMenu,MF_STRING,18,L"Красный");
+			AppendMenu(hFillColorMenu,MF_STRING,19,L"Зелёный");
+			AppendMenu(hFillColorMenu,MF_STRING,20,L"Синий");
+			AppendMenu(hFillColorMenu,MF_STRING,21,L"Чёрный");
+			AppendMenu(hFillColorMenu,MF_STRING,22,L"Прозрачный");
+		  }
+		   AppendMenu(MainMenu,MFT_STRING|MF_POPUP,(UINT)hWidthMenu,L"&Толщина");
+		   {
+			   AppendMenu(hWidthMenu,MF_STRING,23,L"1");
+			   AppendMenu(hWidthMenu,MF_STRING,24,L"2");
+			   AppendMenu(hWidthMenu,MF_STRING,25,L"3");
+			   AppendMenu(hWidthMenu,MF_STRING,26,L"4");
+		   }
 	  SetMenu(hMainWnd,MainMenu);
 	  return 0;
  }
@@ -126,65 +176,64 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 		case WM_COMMAND:
 		flag=false;
 		switch(wParam){
-		case 1:
-			OpenFile(hWnd);
+		case OPEN:OpenFile(hWnd);break;
+		case SAVE:SaveFile(hWnd);break;
+		case PRINT:PrintFile(hWnd);break;
+		case EXIT:DestroyWindow(hWnd);
 			break;
-		case 2:
-			SaveFile(hWnd);
+		default:
+			return DefWindowProc(hWnd, uMsg, wParam, lParam);
 			break;
-		case 3:
-			PrintFile(hWnd);
-			break;
-		case 4:break;
-		case 5:Tools=5;break;
-		case 6:Tools=6;break;
-		case 7:Tools=7;break;
-		case 8:Tools=8;break;
-		case 9:Tools=9;break;
-		case 10:Tools=10;break;
-		case 11:Tools=11;
-			fText=true;
-			i=0;
-			break;
-		case 12:Tools=12;
-			xscale=xscale_last;
-			yscale=yscale_last;
-			break;
-		case 13:
-			Tools=13;
-			spacex=xlast;
-			spacey=ylast;
-			break;
+		case PEN:Tools=5;break;
+		case LINE:Tools=6;break;
+		case ELLIPSE:Tools=7;break;
+		case REC:Tools=8;break;
+		case POLYLINE:Tools=9;break;
+		case POLYGON:Tools=10;break;
+		case TEXT:Tools=11;fText=true;i=0;break;
+		case ZOOM:Tools=12;xscale=xscale_last;yscale=yscale_last;break;
+		case PAN:Tools=13;spacex=xlast;spacey=ylast;break;
+		case RED:color=RGB(255,0,0);hPen=CreatePen(PS_SOLID,width,color);break;
+		case GREEN:color=RGB(0,255,0);hPen=CreatePen(PS_SOLID,width,color);break;
+		case BLUE:color=RGB(0,0,255);hPen=CreatePen(PS_SOLID,width,color);break;
+		case BLACK:color=RGB(0,0,0);hPen=CreatePen(PS_SOLID,width,color);break;
+		case FILLRED:hBrush=CreateSolidBrush(RGB(255,0,0));break;
+		case FILLGREEN:hBrush=CreateSolidBrush(RGB(0,255,0));break;
+		case FILLBLUE:hBrush=CreateSolidBrush(RGB(0,0,255));break;
+		case FILLBLACK:hBrush=CreateSolidBrush(RGB(0,0,0));break;
+		case FILLNONE:hBrush=(HBRUSH)GetStockObject(HOLLOW_BRUSH);break;
+		case WIDTH1:width=1;hPen=CreatePen(PS_SOLID,width,color);break;
+		case WIDTH2:width=2;hPen=CreatePen(PS_SOLID,width,color);break;
+		case WIDTH3:width=3;hPen=CreatePen(PS_SOLID,width,color);break;
+		case WIDTH4:width=4;hPen=CreatePen(PS_SOLID,width,color);break;
 		};
 			break;
 	case WM_PAINT:
 		hDC=BeginPaint(hWnd,&ps);
 		GetClientRect(hWnd,&rec);
 		BitBlt(hDC,spacex,spacey,rec.right,rec.bottom,hdcMem,0,0,SRCCOPY);
-
-
 		EndPaint(hWnd,&ps);
 		break;
 	case WM_LBUTTONDOWN:
 		spacex=0;
 		spacey=0;
-				hDC=GetDC(hWnd);
-				GetClientRect(hWnd,&rec);
-				hdcMem=CreateCompatibleDC(hDC);
-				hbmMem=CreateCompatibleBitmap(hDC,rec.right,rec.bottom);
-				hOld=SelectObject(hdcMem,hbmMem);
-				BitBlt(hdcMem,0,0,rec.right,rec.bottom,hDC,0,0,SRCCOPY);
-				ReleaseDC(hWnd,hDC);
-				if(Tools==11)
-				{
-					fText=true;
-					i=0;
-					text=(char *)calloc(256,sizeof(char));
-				}
-				if(Tools==9)
-					Poly_line=true;
-				else
-					Poly_line=false;
+		hDC=GetDC(hWnd);
+		GetClientRect(hWnd,&rec);
+		hdcMem=CreateCompatibleDC(hDC);
+		hbmMem=CreateCompatibleBitmap(hDC,rec.right,rec.bottom);
+		hOld=SelectObject(hdcMem,hbmMem);
+		BitBlt(hdcMem,0,0,rec.right,rec.bottom,hDC,0,0,SRCCOPY);
+		ReleaseDC(hWnd,hDC);
+		if(Tools==11)
+			{
+				fText=true;
+				i=0;
+				text=(char *)calloc(256,sizeof(char));
+			}
+		if(Tools==9)
+			Poly_line=true;
+		else
+			Poly_line=false;
 			startX=LOWORD(lParam);
 			startY=HIWORD(lParam);
 			flag=true;
@@ -198,19 +247,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 	case WM_LBUTTONUP:
 		if(Poly_line)
 		{
+			SelectObject(hDC,hPen);
+			SelectObject(hDC,hBrush);
 			MoveToEx(hDC,startX,startY,0);
 			LineTo(hDC,LOWORD(lParam),HIWORD(lParam));
 			startX=LOWORD(lParam);
 			startY=HIWORD(lParam);
 		}
 		else
-		flag=false;
+			flag=false;
 		hDC=GetDC(hWnd);		
 		GetClientRect(hWnd,&rec);
 		BitBlt(hdcMem,0,0,rec.right,rec.bottom,hDC,0,0,SRCCOPY);
-		break;
+	break;
 	case WM_RBUTTONDOWN:
 		hDC=GetDC(hWnd);
+		SelectObject(hDC,hPen);
+		SelectObject(hDC,hBrush);
 		GetClientRect(hWnd,&rec);
 		InvalidateRect(hWnd,&rec,true);
 		MoveToEx(hDC,startX,startY,0);
@@ -232,9 +285,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 				text[i++]=c;
 			TextOutA(hDC,startX,startY,(LPSTR)text,strlen((char *)text));
 		}
-		break;
+	break;
+	case WM_KEYDOWN:
+			switch(wParam){
+			case 83:
+				if(!fText)
+					SaveFile(hWnd);
+				break;
+			}
+	break;
+	case WM_KEYUP:
+		keyflag=false;
+	break;
 	case WM_MOUSEWHEEL:
-		if(Tools==12)
+		if(GET_KEYSTATE_WPARAM(wParam) == MK_CONTROL && Tools==12)
+		{
 		if(GET_WHEEL_DELTA_WPARAM(wParam)>0)
 		{
 			hDC=GetDC(hWnd);
@@ -243,7 +308,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			yscale+=10;
 			StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
      		0, 0, rec.right, rec.bottom, SRCCOPY);
-			
 			ReleaseDC(hWnd,hDC);
 		}
 		else
@@ -258,55 +322,69 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 		}
 		xscale_last=xscale;
 		yscale_last=yscale;
-		break;
-	case WM_KEYDOWN:
-		{
-			if(Tools==13)
+		}
+					if(GET_KEYSTATE_WPARAM(wParam) == MK_SHIFT)
+					{
+					if(GET_WHEEL_DELTA_WPARAM(wParam)>0 && Tools==13)
+					{
+						hDC=GetDC(hWnd);
+						GetClientRect(hWnd,&rec);
+						InvalidateRect(hWnd,&rec,true);
+						UpdateWindow(hWnd);
+						spacex+=3;
+						StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
+						0, 0, rec.right, rec.bottom, SRCCOPY);
+						ReleaseDC(hWnd,hDC);
+						xlast=spacex;
+						ylast=spacey;
+					}
+					else
+						if(GET_WHEEL_DELTA_WPARAM(wParam)<0 && Tools==13)
+						{
+							hDC=GetDC(hWnd);
+							GetClientRect(hWnd,&rec);
+							InvalidateRect(hWnd,&rec,true);
+							UpdateWindow(hWnd);
+							spacex-=3;
+							StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
+							0, 0, rec.right, rec.bottom, SRCCOPY);
+							ReleaseDC(hWnd,hDC);
+							xlast=spacex;
+							ylast=spacey;
+						}
+					}
+					else
+			if(GET_WHEEL_DELTA_WPARAM(wParam)>0 && Tools==13)
 			{
-				hDC=GetDC(hWnd);
-				WPARAM key=wParam;
-				switch(key)
-				{
-				case 37:
-					GetClientRect(hWnd,&rec);
-					InvalidateRect(hWnd,&rec,true);
-					UpdateWindow(hWnd);
-					spacex-=3;
-					StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
-					0, 0, rec.right, rec.bottom, SRCCOPY);
-					break;
-				case 38:
+					hDC=GetDC(hWnd);
 					GetClientRect(hWnd,&rec);
 					InvalidateRect(hWnd,&rec,true);
 					UpdateWindow(hWnd);
 					spacey-=3;
 					StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
 					0, 0, rec.right, rec.bottom, SRCCOPY);
-					break;
-				case 39:
-					GetClientRect(hWnd,&rec);
-					InvalidateRect(hWnd,&rec,true);
-					UpdateWindow(hWnd);
-					spacex+=3;
-					StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
-					0, 0, rec.right, rec.bottom, SRCCOPY);
-					break;
-				case 40:
+					ReleaseDC(hWnd,hDC);
+					xlast=spacex;
+					ylast=spacey;
+			}
+			else
+				if(GET_WHEEL_DELTA_WPARAM(wParam)<0 && Tools==13)
+				{
+					hDC=GetDC(hWnd);
 					GetClientRect(hWnd,&rec);
 					InvalidateRect(hWnd,&rec,true);
 					UpdateWindow(hWnd);
 					spacey+=3;
 					StretchBlt(hDC, spacex, spacey, rec.right + xscale, rec.bottom + yscale, hdcMem,
 					0, 0, rec.right, rec.bottom, SRCCOPY);
-					break;
+					ReleaseDC(hWnd,hDC);
+					xlast=spacex;
+					ylast=spacey;
 				}
-				xlast=spacex;
-				ylast=spacey;
-			}
-		}
-		break;
+	break;
     case WM_DESTROY: 
-		DeleteObject(RedPen);
+		DeleteObject(hPen);
+		DeleteObject(hBrush);
 		ReleaseDC(hWnd,hDC);
         PostQuitMessage(NULL);
 		SelectObject(hdcMem,hOld);
@@ -377,7 +455,6 @@ BOOL OpenFile(HWND hWnd)
 
 	HENHMETAFILE hemf = GetEnhMetaFile(ofn.lpstrFile);
 	PlayEnhMetaFile(hDC, hemf, &rec);
-	//PlayEnhMetaFile(hdc, hemf, &rect);
 	DeleteEnhMetaFile(hemf);
 	InvalidateRect(hWnd, &rec, false);
 	return TRUE;
@@ -408,10 +485,8 @@ BOOL PrintFile(HWND hWnd)
 		doc.lpszOutput = (TCHAR *)pdn + pdn->wOutputOffset;
 		int sd = StartDoc(pd.hDC, &doc);
 		StartPage(pd.hDC);
-		//BitBlt(pd.hDC, 0, 0, width, height, dubmemDC, 0, 0, SRCCOPY);
 		BitBlt(pd.hDC, 0, 0, rec.right, rec.bottom, hDC, 0, 0, SRCCOPY);
 		EndPage(pd.hDC);
-		//EndDoc(pd.hDC);
 		DeleteDC(pd.hDC);
 	}
 
@@ -422,7 +497,8 @@ VOID Draw(HWND hWnd,LPARAM lParam)
 {
 	HDC hDC=GetDC(hWnd);
 	GetClientRect(hWnd,&rec);
-	SelectObject(hDC,RedPen);
+	SelectObject(hDC,hPen);
+	SelectObject(hDC,hBrush);
 switch(Tools)
 		{
 		case PEN:
@@ -457,7 +533,22 @@ switch(Tools)
 			MoveToEx(hDC,startX,startY,0);
 			LineTo(hDC,LOWORD(lParam),HIWORD(lParam));
 		break;
-		case TEXT:
-		break;
+		case POLYGON:
+			GetClientRect(hWnd,&rec);
+			InvalidateRect(hWnd,&rec,true);
+			UpdateWindow(hWnd);
+
+			MoveToEx(hDC,startX,startY,0);
+			LineTo(hDC,LOWORD(lParam),HIWORD(lParam));
+
+			MoveToEx(hDC,LOWORD(lParam),HIWORD(lParam),0);
+			LineTo(hDC,LOWORD(lParam)-(LOWORD(lParam)-startX)*2,HIWORD(lParam));
+
+			MoveToEx(hDC,LOWORD(lParam)-(LOWORD(lParam)-startX)*2,HIWORD(lParam),0);
+			LineTo(hDC,startX,startY);
+
+			break;
 		};
+DeleteObject(hPen);
+DeleteObject(hBrush);
 }
